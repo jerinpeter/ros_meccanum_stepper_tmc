@@ -7,22 +7,22 @@
 #include <AccelStepper.h>
 #define MOTOR_STEPS 200
 
-//Front Right
-#define STEP1 3
-#define front_right_DIR 4
-
-//Front Left
-#define STEP2 5
-#define front_left_DIR 6
-
-//Rear Right
-#define STEP3 7
-#define rear_right_DIR 8
-
-
-//Rear Left
-#define STEP4 9
-#define rear_rightDIR 10
+////Front Right
+//#define STEP1 3
+//#define front_right_DIR 4
+//
+////Front Left
+//#define STEP2 5
+//#define front_left_DIR 6
+//
+////Rear Right
+//#define STEP3 7
+//#define rear_right_DIR 8
+//
+//
+////Rear Left
+//#define STEP4 9
+//#define rear_rightDIR 10
 //
 //A4988 front_right_motor(MOTOR_STEPS, front_right_DIR, STEP1);
 //A4988 front_left_motor(MOTOR_STEPS, front_left_DIR, STEP2);
@@ -39,12 +39,10 @@ int wheelSpeed = 1500;
 ros::NodeHandle nh;        // Node handle Object
 geometry_msgs::Twist msg;  // msg variable of data type twist
 
-std_msgs::Int32 value;  
+//std_msgs::Int32 value;  
  
 
-ros::Publisher motor_value("motor_value", &value);
-
-
+//ros::Publisher motor_value("motor_value", &value);
 
 
 double speed_x;
@@ -55,7 +53,6 @@ double speed_front_left;
 double speed_front_right;
 double speed_back_left;
 double speed_back_right;
-
 
 
 double wheel_radius = 0.05;
@@ -69,12 +66,10 @@ double wheel_geometry = (wheel_seperation_width + wheel_seperation_length) / 2;
 
 
 
-
-
 void messageCb(const geometry_msgs::Twist& msg)  // cmd_vel callback function definition
  {
-  speed_x = max(min(msg.linear.x, 0.6f), -0.6f);   // limits the linear x value from -1 to 1
-  speed_y = max(min(msg.linear.y, 0.6f), -0.6f);  // limits the angular z value from -1 to 1
+  speed_x = max(min(msg.linear.x, 1.0f), -1.0f);   // limits the linear x value from -1 to 1
+  speed_y = max(min(msg.linear.y, 1.0f), -1.0f);  // limits the angular z value from -1 to 1
   speed_rot = max(min(msg.angular.z, 1.0f), -1.0f);  // limits the angular z value from -1 to 1
 
     front_left = (speed_x - speed_y - speed_rot * wheel_geometry) / wheel_radius;
@@ -108,6 +103,7 @@ if((front_left) && (front_right) && (back_left) && (back_right) > 0)
   rotateRight();
   
   else if(((front_left) && (back_left) < 0) && ((back_left) && (front_left) > 0))
+  
   rotateLeft();
 
 
@@ -121,20 +117,20 @@ ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel",&messageCb);  // creation of
 
 void setup() 
   {
-     LeftFrontWheel.setMaxSpeed(3000);
+  LeftFrontWheel.setMaxSpeed(3000);
   LeftBackWheel.setMaxSpeed(3000);
   RightFrontWheel.setMaxSpeed(3000);
   RightBackWheel.setMaxSpeed(3000);
 
      nh.initNode();      // initialzing the node handle object
      nh.subscribe(sub);  // subscribing to cmd vel with sub object
-    nh.advertise(motor_value);
+//    nh.advertise(motor_value);
 
   }
 
 void loop() {
-  value.data = back_right;
-  motor_value.publish(&value);
+//  value.data = back_right;
+//  motor_value.publish(&value);
   nh.spinOnce();
  
 }
