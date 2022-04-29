@@ -4,8 +4,9 @@
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Int32.h>
 #include "MapFloat.h"
-
-#include <SoftwareSerial.h>
+#include<SoftwareSerial.h>
+std_msgs::Int32 value;  
+ros::Publisher motor_value("motor_value", &value);
 
 SoftwareSerial mySerial(2, 3); 
 
@@ -28,11 +29,20 @@ double tan_rpm_;
 
 double circumference_ = 0.314;
 
-double rpm_motor_fl;
-double rpm_motor_fr;
-double rpm_motor_br;
-double rpm_motor_bl;
 
+
+double speed_front_left;
+double speed_front_right;
+double speed_back_left;
+double speed_back_right;
+
+double wheel_radius = 0.05;
+double wheel_seperation_width = 0.37;
+double wheel_seperation_length = 0.32;
+double front_left;double front_right;
+double back_left;double back_right;
+
+double wheel_geometry = (wheel_seperation_width + wheel_seperation_length) / 2;
 
 #define FR_EN_PIN           A8 // Enable
 #define FR_DIR_PIN          48 // Direction
@@ -45,8 +55,8 @@ double rpm_motor_bl;
 #define FL_EN_PIN           A8 // Enable
 #define FL_DIR_PIN          48 // Direction
 #define FL_STEP_PIN         46 // Step
-//#define SW_RX            A11 // TMC2208/TMC2224 SoftwareSerial receive pin
-//#define SW_TX            D42 // TMC2208/TMC2224 SoftwareSerial transmit pin
+#define SW_RX            A11 // TMC2208/TMC2224 SoftwareSerial receive pin
+#define SW_TX            D42 // TMC2208/TMC2224 SoftwareSerial transmit pin
 #define FL_SERIAL_PORT Serial2 // Arduino mega Hw serial pins Tx=18 and Rx=19
 
 
@@ -55,11 +65,15 @@ double rpm_motor_bl;
 
 TMC2209Stepper FR_driver(&FR_SERIAL_PORT, R_SENSE, DRIVER_ADDRESS);
 TMC2209Stepper FL_driver(&FL_SERIAL_PORT, R_SENSE, DRIVER_ADDRESS);
+TMC2209Stepper BR_driver(&FR_SERIAL_PORT, R_SENSE, DRIVER_ADDRESS);
+TMC2209Stepper BL_driver(&FL_SERIAL_PORT, R_SENSE, DRIVER_ADDRESS);
 
 constexpr uint32_t steps_per_m = 1911; // steps needed for robot to move 1m
 
 AccelStepper FR_stepper = AccelStepper(FR_stepper.DRIVER, FR_STEP_PIN, FR_DIR_PIN);
 AccelStepper FL_stepper = AccelStepper(FL_stepper.DRIVER, FL_STEP_PIN, FL_DIR_PIN);
+AccelStepper BR_stepper = AccelStepper(BR_stepper.DRIVER, FR_STEP_PIN, FR_DIR_PIN);
+AccelStepper BL_stepper = AccelStepper(BL_stepper.DRIVER, FL_STEP_PIN, FL_DIR_PIN);
 
 
 
@@ -71,90 +85,122 @@ void messageCb(const geometry_msgs::Twist& msg)  // cmd_vel callback function de
   speed_y = max(min(msg.linear.y, 1.0f), -1.0f); 
   speed_rot = max(min(msg.angular.z, 1.0f), -1.0f); 
 
-  linear_vel_x_mins_ = speed_x * 60;
-  linear_vel_y_mins_ = speed_y * 60;
-  angular_vel_z_mins_ = speed_rot * 60;
-  
-  tangential_vel_ = angular_vel_z_mins_ * 0.37;  // 0.37 -> base width
-
-  x_rpm_ = linear_vel_x_mins_ / circumference_;
-  y_rpm_ = linear_vel_y_mins_ / circumference_;
-  tan_rpm_ = tangential_vel_ / circumference_;
-
-  rpm_motor_fl = x_rpm_ - y_rpm_ - tan_rpm_;    //front-left motor
-   
-  rpm_motor_bl = x_rpm_ + y_rpm_ - tan_rpm_;     //back-left motor
-
-  rpm_motor_fr = x_rpm_ + y_rpm_ + tan_rpm_;     //front-right motor
-  
-  rpm_motor_br = x_rpm_ - y_rpm_ + tan_rpm_;     //back-right motor
-  
-
-if((rpm_motor_fl) && (rpm_motor_bl) && (rpm_motor_fr) && (rpm_motor_br) > 0)
-{
-
-    FR_stepper.setSpeed(rpm_motor_fr*10);
-    FL_stepper.setSpeed(rpm_motor_fl*10);
-    FR_stepper.runSpeed();
-    FL_stepper.runSpeed();
-}
-  
-  
-  else if((rpm_motor_fl) && (rpm_motor_bl) && (rpm_motor_fr) && (rpm_motor_br) < 0)
-{
- 
-    FR_stepper.setSpeed(rpm_motor_fr*10);
-    FL_stepper.setSpeed(rpm_motor_fl*10);
-    FR_stepper.runSpeed();
-    FL_stepper.runSpeed();
-}
+    front_left = (speed_x - speed_y - speed_rot * wheel_geometry) / wheel_radius;
+    front_right = (speed_x + speed_y + speed_rot * wheel_geometry) / wheel_radius;
+    back_left = (speed_x + speed_y - speed_rot * wheel_geometry) / wheel_radius;
+    back_right = (speed_x - speed_y + speed_rot * wheel_geometry) / wheel_radius;
 
 
+if((front_left) && (front_right) && (back_left) && (back_right) == 0)
+ {
+FR_stepper.setSpeed(0);
+FL_stepper.setSpeed(0);
+BR_stepper.setSpeed(0);
+BL_stepper.setSpeed(0);
+FR_stepper.runSpeed();
+FL_stepper.runSpeed();
+BR_stepper.runSpeed();
+BL_stepper.runSpeed();
+
+  }
+
+  else {
+  speed_front_left = mapFloat(fabs(front_left), 0.0, 20.0, 100,1000);
+  speed_front_right = mapFloat(fabs(front_right), 0.0, 20.0, 100,3000);
+  speed_back_right= mapFloat(fabs(back_right), 0.0, 20.0, 100,3000);
+  speed_back_left = mapFloat(fabs(back_left), 0.0, 20.0, 100,3000);
+  }
+
+if((front_left) && (front_right) && (back_left) && (back_right) > 0) 
+ {
+  FR_stepper.setSpeed(speed_front_right);
+  FL_stepper.setSpeed(speed_front_left);
+  BR_stepper.setSpeed(speed_back_right);
+  BL_stepper.setSpeed(speed_back_left);
  }
+ else if((front_left) && (front_right) && (back_left) && (back_right) < 0)
+  {
+  FR_stepper.setSpeed(-speed_front_right);
+  FL_stepper.setSpeed(-speed_front_left);
+  BR_stepper.setSpeed(-speed_back_right);
+  BL_stepper.setSpeed(-speed_back_left);
+  }
+  else if(((front_left) && (back_left) > 0) && ((back_right) && (front_right) < 0))
+  {
+  FR_stepper.setSpeed(-speed_front_right);
+  FL_stepper.setSpeed(speed_front_left);
+  BR_stepper.setSpeed(-speed_back_right);
+  BL_stepper.setSpeed(speed_back_left);
+  }
+  else if(((front_left) && (back_left) < 0) && ((back_right) && (front_right) > 0))
+  {
+  FR_stepper.setSpeed(speed_front_right);
+  FL_stepper.setSpeed(-speed_front_left);
+  BR_stepper.setSpeed(speed_back_right);
+  BL_stepper.setSpeed(-speed_back_left);
+  }
+else
+{
+  FR_stepper.setSpeed(0);
+  FL_stepper.setSpeed(0);
+  BR_stepper.setSpeed(0);
+  BL_stepper.setSpeed(0);
+  }
+ }
+
 
 
 ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel",&messageCb);  
 
 void setup() {
      
-     nh.initNode();      // initialzing the node handle object
-     nh.subscribe(sub);  // subscribing to cmd vel with sub object
-    
-    FR_SERIAL_PORT.begin(115200);      // HW UART drivers
-    //driver.begin();             // Initiate pins and registeries
-    FR_driver.toff(5);                 // Enables driver in software
-    FR_driver.rms_current(900);    // Set stepper current to 600mA. The command is the same as command TMC2130.setCurrent(600, 0.11, 0.5);
-    FR_driver.en_spreadCycle(true);   // Toggle spreadCycle on TMC2208/2209/2224
+     nh.initNode();     
+//   nh.advertise(motor_value);
+     nh.subscribe(sub);  
+
+// ****FRONT RIGHT STEPPER SETUP****
+    FR_SERIAL_PORT.begin(115200);      
+    //driver.begin();             
+    FR_driver.toff(5);                 
+    FR_driver.rms_current(900);    
+    FR_driver.en_spreadCycle(true);   
     //driver.pwm_autoscale(1);
-    FR_driver.intpol(true); //1/256 microstep interpolation
-    FR_driver.microsteps(1); //Microsteps. 1 = full step
-    
+    FR_driver.intpol(true); 
+    FR_driver.microsteps(1); 
     FR_stepper.setMaxSpeed(0.5*steps_per_m); //0.5m/s
     FR_stepper.setAcceleration(0.1*steps_per_m); // 0.1m/s^2
     FR_stepper.setEnablePin(FR_EN_PIN);
     FR_stepper.setPinsInverted(false, false, true);
     FR_stepper.enableOutputs();
 
-    FL_SERIAL_PORT.begin(115200);      // HW UART drivers
-    //driver.begin();             // Initiate pins and registeries
-    FL_driver.toff(5);                 // Enables driver in software
-    FL_driver.rms_current(900);    // Set stepper current to 600mA. The command is the same as command TMC2130.setCurrent(600, 0.11, 0.5);
-    FL_driver.en_spreadCycle(true);   // Toggle spreadCycle on TMC2208/2209/2224
-    //driver.pwm_autoscale(1);
-    FL_driver.intpol(true); //1/256 microstep interpolation
-    FL_driver.microsteps(1); //Microsteps. 1 = full step
     
-    FL_stepper.setMaxSpeed(0.5*steps_per_m); //0.5m/s
-    FL_stepper.setAcceleration(0.1*steps_per_m); // 0.1m/s^2
-    FL_stepper.setEnablePin(FL_EN_PIN);
-    FL_stepper.setPinsInverted(false, false, true);
-    FL_stepper.enableOutputs();
+// ****FRONT LEFT STEPPER SETUP****
 
+  FL_SERIAL_PORT.begin(115200);      // HW UART drivers
+  FL_driver.begin();             // Initiate pins and registeries
+  FL_driver.toff(5);                 // Enables driver in software
+  FL_driver.rms_current(900);    // Set stepper current to 600mA. The command is the same as command TMC2130.setCurrent(600, 0.11, 0.5);
+  FL_driver.en_spreadCycle(true);   // Toggle spreadCycle on TMC2208/2209/2224
+  FL_driver.pwm_autoscale(1);
+  FL_driver.intpol(true); //1/256 microstep interpolation
+  FL_driver.microsteps(1); //Microsteps. 1 = full step
+    
+  FL_stepper.setMaxSpeed(0.5*steps_per_m); //0.5m/s
+  FL_stepper.setAcceleration(0.1*steps_per_m); // 0.1m/s^2
+  FL_stepper.setEnablePin(FL_EN_PIN);
+  FL_stepper.setPinsInverted(false, false, true);
+  FL_stepper.enableOutputs();
+  FR_stepper.setSpeed(0);
     
 }
 
 void loop() {
+//      value.data = front_right;
+//  motor_value.publish(&value);
+
     nh.spinOnce();
-//    stepper.setSpeed(0.5*steps_per_m);
-//    stepper.runSpeed();
+    FR_stepper.runSpeed();
+    FL_stepper.runSpeed();
+    BR_stepper.runSpeed();
+    BL_stepper.runSpeed();
 }
