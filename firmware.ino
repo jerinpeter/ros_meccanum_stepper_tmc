@@ -5,8 +5,10 @@
 #include <std_msgs/Int32.h>
 #include "MapFloat.h"
 #include<SoftwareSerial.h>
-std_msgs::Int32 value;  
-ros::Publisher motor_value("motor_value", &value);
+std_msgs::Int32 value1;
+std_msgs::Int32 value2;   
+ros::Publisher rmotor_value("rmotor_value", &value1);
+ros::Publisher lmotor_value("lmotor_value", &value2);
 
 SoftwareSerial mySerial(2, 3); 
 
@@ -93,6 +95,8 @@ void messageCb(const geometry_msgs::Twist& msg)  // cmd_vel callback function de
 
 if((front_left) && (front_right) && (back_left) && (back_right) == 0)
  {
+
+  
 FR_stepper.setSpeed(0);
 FL_stepper.setSpeed(0);
 BR_stepper.setSpeed(0);
@@ -101,6 +105,7 @@ FR_stepper.runSpeed();
 FL_stepper.runSpeed();
 BR_stepper.runSpeed();
 BL_stepper.runSpeed();
+
 
   }
 
@@ -111,36 +116,45 @@ BL_stepper.runSpeed();
   speed_back_left = mapFloat(fabs(back_left), 0.0, 20.0, 100,3000);
   }
 
-if((front_left) && (front_right) && (back_left) && (back_right) > 0) 
+   if(((front_left) && (back_left) > 0) && ((back_right) && (front_right) < 0))
+  {
+    value1.data = 3;
+  FR_stepper.setSpeed(-speed_front_right);
+  FL_stepper.setSpeed(speed_front_left);
+  BR_stepper.setSpeed(-speed_back_right);
+  BL_stepper.setSpeed(speed_back_left);
+  }
+
+  else if(((front_left) && (back_left) < 0) && ((back_right) && (front_right) > 0))
+  {
+    value1.data = 4;
+  FR_stepper.setSpeed(speed_front_right);
+  FL_stepper.setSpeed(-speed_front_left);
+  BR_stepper.setSpeed(speed_back_right);
+  BL_stepper.setSpeed(-speed_back_left);
+  }
+
+else if((front_left) && (front_right) && (back_left) && (back_right) < 0)
+  {
+    value1.data = 2;
+  FR_stepper.setSpeed(-speed_front_right);
+  FL_stepper.setSpeed(-speed_front_left);
+  BR_stepper.setSpeed(-speed_back_right);
+  BL_stepper.setSpeed(-speed_back_left);
+  }
+else if((front_left) && (front_right) && (back_left) && (back_right) > 0) 
  {
+  value1.data = 1;
   FR_stepper.setSpeed(speed_front_right);
   FL_stepper.setSpeed(speed_front_left);
   BR_stepper.setSpeed(speed_back_right);
   BL_stepper.setSpeed(speed_back_left);
  }
- else if((front_left) && (front_right) && (back_left) && (back_right) < 0)
-  {
-  FR_stepper.setSpeed(-speed_front_right);
-  FL_stepper.setSpeed(-speed_front_left);
-  BR_stepper.setSpeed(-speed_back_right);
-  BL_stepper.setSpeed(-speed_back_left);
-  }
-  else if(((front_left) && (back_left) > 0) && ((back_right) && (front_right) < 0))
-  {
-  FR_stepper.setSpeed(-speed_front_right);
-  FL_stepper.setSpeed(speed_front_left);
-  BR_stepper.setSpeed(-speed_back_right);
-  BL_stepper.setSpeed(speed_back_left);
-  }
-  else if(((front_left) && (back_left) < 0) && ((back_right) && (front_right) > 0))
-  {
-  FR_stepper.setSpeed(speed_front_right);
-  FL_stepper.setSpeed(-speed_front_left);
-  BR_stepper.setSpeed(speed_back_right);
-  BL_stepper.setSpeed(-speed_back_left);
-  }
+ 
+  
 else
 {
+  value1.data = 5;
   FR_stepper.setSpeed(0);
   FL_stepper.setSpeed(0);
   BR_stepper.setSpeed(0);
@@ -154,11 +168,12 @@ ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel",&messageCb);
 
 void setup() {
      
-     nh.initNode();     
-//   nh.advertise(motor_value);
-     nh.subscribe(sub);  
+   nh.initNode();     
+   nh.advertise(rmotor_value);
+   nh.advertise(lmotor_value);
+   nh.subscribe(sub);  
 
-// ****FRONT RIGHT STEPPER SETUP****
+// *FRONT RIGHT STEPPER SETUP*
     FR_SERIAL_PORT.begin(115200);      
     //driver.begin();             
     FR_driver.toff(5);                 
@@ -174,7 +189,7 @@ void setup() {
     FR_stepper.enableOutputs();
 
     
-// ****FRONT LEFT STEPPER SETUP****
+// *FRONT LEFT STEPPER SETUP*
 
   FL_SERIAL_PORT.begin(115200);      // HW UART drivers
   FL_driver.begin();             // Initiate pins and registeries
@@ -195,9 +210,10 @@ void setup() {
 }
 
 void loop() {
-//      value.data = front_right;
-//  motor_value.publish(&value);
-
+      
+//      value2.data = back_left;
+  rmotor_value.publish(&value1);
+//lmotor_value.publish(&value2);
     nh.spinOnce();
     FR_stepper.runSpeed();
     FL_stepper.runSpeed();
